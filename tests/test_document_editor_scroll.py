@@ -47,3 +47,11 @@ def test_line_number_gutter_accounts_for_wrapped_rows():
     assert ".doc-line-number-row" in STYLE_CSS
     assert ".doc-line-number-label" in STYLE_CSS
     assert ".doc-line-number-measure" in STYLE_CSS
+
+
+def test_ctrl_x_cuts_current_line_only_without_selection():
+    assert "function _cutCurrentTextareaLine(textarea)" in DOC_JS
+    assert "textarea.selectionStart !== textarea.selectionEnd" in DOC_JS
+    assert "e.key.toLowerCase() === 'x' && ta.selectionStart === ta.selectionEnd" in DOC_JS
+    assert "textarea.setRangeText('', removeStart, removeEnd, 'start');" in DOC_JS
+    assert "textarea.dispatchEvent(new Event('input', { bubbles: true }));" in DOC_JS

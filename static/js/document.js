@@ -586,6 +586,41 @@ import * as Modals from './modalManager.js';
     } catch (_) { try { el.blur(); } catch (_) {} }
   }
 
+  function _copyTextToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => {});
+    }
+    const scratch = document.createElement('textarea');
+    scratch.value = text;
+    scratch.setAttribute('readonly', '');
+    scratch.style.position = 'fixed';
+    scratch.style.left = '-9999px';
+    document.body.appendChild(scratch);
+    scratch.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    scratch.remove();
+    return Promise.resolve();
+  }
+
+  function _cutCurrentTextareaLine(textarea) {
+    if (!textarea || textarea.selectionStart !== textarea.selectionEnd) return false;
+    const text = textarea.value || '';
+    if (!text) return false;
+
+    const pos = textarea.selectionStart ?? 0;
+    const lineStart = text.lastIndexOf('\n', Math.max(0, pos - 1)) + 1;
+    const nextNewline = text.indexOf('\n', pos);
+    const lineEnd = nextNewline === -1 ? text.length : nextNewline;
+    const cutText = text.slice(lineStart, lineEnd) + '\n';
+    const removeStart = nextNewline === -1 && lineStart > 0 ? lineStart - 1 : lineStart;
+    const removeEnd = nextNewline === -1 ? lineEnd : lineEnd + 1;
+
+    _copyTextToClipboard(cutText);
+    textarea.setRangeText('', removeStart, removeEnd, 'start');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
   async function _downloadFilledPdf() {
     if (!activeDocId) return;
     _dismissDocKb();   // export shouldn't leave the keyboard up
@@ -4728,6 +4763,13 @@ import * as Modals from './modalManager.js';
           e.stopPropagation();
           closePanel('down');
           return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'x' && ta.selectionStart === ta.selectionEnd) {
+          if (_cutCurrentTextareaLine(ta)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
         }
         if (e.key === 'Tab') {
           e.preventDefault();
