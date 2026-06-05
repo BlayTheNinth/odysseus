@@ -235,6 +235,52 @@ def test_default_chat_uses_owned_endpoint_as_regular_user_last_resort(monkeypatc
     }
 
 
+def test_default_chat_api_token_uses_token_owner(monkeypatch):
+    _install_model_route_import_stubs(monkeypatch)
+    import routes.model_routes as model_routes
+    import routes.prefs_routes as prefs_routes
+
+    owned_ep = SimpleNamespace(
+        id="owned",
+        base_url="http://localhost:11434",
+        is_enabled=True,
+        owner="alice",
+        cached_models='["alice-model"]',
+    )
+
+    def scoped_owner_filter(query, model_cls, user, *, include_shared=True):
+        query.rows = [
+            row for row in query.rows
+            if row.owner == user or (include_shared and row.owner is None)
+        ]
+        return query
+
+    monkeypatch.setattr(model_routes, "ModelEndpoint", _FakeModelEndpoint)
+    monkeypatch.setattr(model_routes, "SessionLocal", lambda: _FakeDb([owned_ep]))
+    monkeypatch.setattr(model_routes, "_load_settings", lambda: {})
+    monkeypatch.setattr(model_routes, "owner_filter", scoped_owner_filter)
+    monkeypatch.setattr(model_routes, "_normalize_base", lambda base: base.rstrip("/"))
+    monkeypatch.setattr(model_routes, "build_chat_url", lambda base: f"{base}/chat/completions")
+    monkeypatch.setattr(prefs_routes, "_load_for_user", lambda user: {})
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(
+            current_user="api",
+            api_token=True,
+            api_token_owner="alice",
+        ),
+        app=SimpleNamespace(state=SimpleNamespace(
+            auth_manager=SimpleNamespace(is_admin=lambda user: False)
+        )),
+    )
+
+    assert _default_chat_endpoint()(request) == {
+        "endpoint_id": "owned",
+        "endpoint_url": "http://localhost:11434/chat/completions",
+        "model": "alice-model",
+    }
+
+
 def test_preset_manager_persists_inject_fields(tmp_path):
     manager = PresetManager(str(tmp_path))
 
